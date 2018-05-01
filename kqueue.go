@@ -12,6 +12,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"time"
 
@@ -505,6 +506,14 @@ func register(kq int, fds []int, flags int, fflags uint32) error {
 	return nil
 }
 
+// https://github.com/fsnotify/fsnotify/issues/212#issuecomment-360862770
+func min(x, y int) int {
+	if x < y {
+		return x
+	}
+	return y
+}
+
 // read retrieves pending events, or waits until an event occurs.
 // A timeout of nil blocks indefinitely, while 0 polls the queue.
 func read(kq int, events []unix.Kevent_t, timeout *unix.Timespec) ([]unix.Kevent_t, error) {
@@ -512,6 +521,13 @@ func read(kq int, events []unix.Kevent_t, timeout *unix.Timespec) ([]unix.Kevent
 	if err != nil {
 		return nil, err
 	}
+
+	// added a check for OSX to reduce possibility of this change causing
+	// issues on the production linux build
+	if runtime.GOOS == "darwin" {
+		n = min(n, len(events)-1)
+	}
+
 	return events[0:n], nil
 }
 
